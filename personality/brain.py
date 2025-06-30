@@ -1,5 +1,23 @@
+from random import randint, choice
+from typing import Any
+
+
 # NOTE: this file has been kept intentionally barren of stdlibs to ensure that this module is valid both in full python as well as micropython.
 # This is to support the potential use of this as a personality module for brain-chipped animatronic toys.
+ActionTuple = tuple[
+    int,  # min wellness
+    int,  # min fullness
+    int,  # min displeasedness
+    int,  # min tiredness
+    int,  # min excitedness
+    int,  # max wellness
+    int,  # max fullness
+    int,  # max displeasedness
+    int,  # max tiredness
+    int,  # max excitedness
+    int,  # interaction (0 = no interaction required)
+    Any,  # payload (string for example)
+]
 
 
 class Interaction:
@@ -58,21 +76,17 @@ class Emotions:
         """
         decay_rate: int = 1
 
-        for emotion in [
-            self.wellness,
-            self.fullness,
-            self.displeasedness,
-            self.tiredness,
-            self.excitedness,
+        # decay each attribute, and snap it to the range 0-100 if outside it.
+        for attr in [
+            "wellness",
+            "fullness",
+            "displeasedness",
+            "tiredness",
+            "excitedness",
         ]:
-            # if the emotion is larger than the decay rate, decay by that amount. if it's smaller, snap to minimum.
-            if emotion >= decay_rate:
-                emotion -= decay_rate
-            else:
-                emotion = 0
-
-            # snap the emotion to the max value if it's grown larger.
-            emotion = 100 if emotion > 100 else emotion
+            value = getattr(self, attr)
+            value = max(0, value - decay_rate)
+            setattr(self, attr, min(100, value))
 
 
 # TODO: add logic for reactions
@@ -80,6 +94,10 @@ class Emotions:
 # TODO: build support for action tables
 class Brain:
     """Contains the login implementing the behavior of the animatronic toy."""
+
+    ACTION_TABLE: list[ActionTuple] = [
+        (0, 0, 0, 0, 0, 100, 100, 100, 100, 100, 0, "idle action")
+    ]
 
     def __init__(self):
         # holding these in a separate class lets us call the values out with dot notation like self.emotions.wellness which looks very nice.
@@ -91,3 +109,56 @@ class Brain:
 
     def interact(self, interaction: Interaction):
         """logic for handling user interaction with the animatronic toy"""
+        self._action(interaction)
+
+    def _random_delay(self):
+        """factoring in current state, provide a random delay before running an interval action"""
+        # work out using the emotion values an overall "stress" factor.
+        # if the toy is tired, it should react less quickly. it should be more quick to react if it's unwell, excited, or hungry.
+        wellness, fullness, displeasedness, tiredness, excitedness = self.emotions.get()
+        # Invert wellness and fullness
+        unwell = 100 - wellness
+        hungry = 100 - fullness
+
+        # Combine factors with integer weights (powers of 2 for shifts)
+        stress = (
+            (unwell << 1)
+            + (hungry << 1)
+            + displeasedness
+            + excitedness
+            - (tiredness << 1)
+        )
+
+        # Clamp stress to 0-255 for byte-friendly delay scaling
+        stress = max(0, min(255, stress))
+        print(f"calculated stress: {stress}")
+
+        # add a random offset and decrease the magnitude with a bitshift
+        return (stress + randint(1, 100)) >> 1
+
+    def _action(self, interaction: Interaction = Interaction().NONE):
+        """private method that finds a runnable action in the action table and passes it to the  action runner"""
+        emotions = self.emotions.get()
+        runnable = []
+        for entry in self.ACTION_TABLE:
+            mins = entry[0:5]
+            maxs = entry[5:10]
+            int_req = entry[10]
+            payload = entry[11]
+
+            # Check if emotions fall within min-max ranges and interaction matches (or zero)
+            if all(
+                min_v <= emo <= max_v for min_v, emo, max_v in zip(mins, emotions, maxs)
+            ):
+                if int_req == 0 or int_req == interaction:
+                    runnable.append(payload)
+
+        if runnable:
+            selected = choice(runnable)
+            self._execute_action(selected)
+        else:
+            print("No runnable actions found for current state.")
+
+    def _execute_action(self, payload: Any):
+        """example action runner: print the payload string. intended to be overwritten by subclasses"""
+        print(payload)
