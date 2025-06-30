@@ -27,6 +27,7 @@ class Interaction:
     for all intents and purposes, this is an IntEnum, but the IntEnum base class is not supported by micropython.
     """
 
+    NONE = 0
     SOUND = 1
     BACK_SENSOR = 2
     TAIL_PULL = 3
@@ -106,6 +107,8 @@ class Brain:
     def tick(self):
         """tick function used for periodic action running and emotion decay"""
         self.emotions.decay()
+        self._random_delay()
+        self._action(Interaction().NONE)
 
     def interact(self, interaction: Interaction):
         """logic for handling user interaction with the animatronic toy"""
