@@ -91,8 +91,6 @@ class Emotions:
 
 
 # TODO: add logic for reactions
-# TODO: add logic for random actions in ticker
-# TODO: build support for action tables
 class Brain(Thread):
     """Contains the login implementing the behavior of the animatronic toy."""
 
