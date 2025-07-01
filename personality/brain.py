@@ -1,9 +1,9 @@
 from random import randint, choice
 from typing import Any
+from time import sleep
+from enum import IntEnum
+from threading import Thread
 
-
-# NOTE: this file has been kept intentionally barren of stdlibs to ensure that this module is valid both in full python as well as micropython.
-# This is to support the potential use of this as a personality module for brain-chipped animatronic toys.
 ActionTuple = tuple[
     int,  # min wellness
     int,  # min fullness
@@ -20,7 +20,7 @@ ActionTuple = tuple[
 ]
 
 
-class Interaction:
+class Interaction(IntEnum):
     """
     enumerator class defining interaction types
 
@@ -93,7 +93,7 @@ class Emotions:
 # TODO: add logic for reactions
 # TODO: add logic for random actions in ticker
 # TODO: build support for action tables
-class Brain:
+class Brain(Thread):
     """Contains the login implementing the behavior of the animatronic toy."""
 
     ACTION_TABLE: list[ActionTuple] = [
@@ -101,14 +101,23 @@ class Brain:
     ]
 
     def __init__(self):
+        # set thread parameters up and initialize the class as a thread
+        super().__init__()
+        self.daemon = True
+
         # holding these in a separate class lets us call the values out with dot notation like self.emotions.wellness which looks very nice.
         self.emotions = Emotions()
 
-    def tick(self):
+    def run(self):
+        """thread run function, ticks constantly once the thread starts."""
+        while True:
+            self._tick()
+
+    def _tick(self):
         """tick function used for periodic action running and emotion decay"""
         self.emotions.decay()
         self._random_delay()
-        self._action(Interaction().NONE)
+        self._action(Interaction.NONE)
 
     def interact(self, interaction: Interaction):
         """logic for handling user interaction with the animatronic toy"""
@@ -133,13 +142,13 @@ class Brain:
         )
 
         # Clamp stress to 0-255 for byte-friendly delay scaling
-        stress = max(0, min(255, stress))
+        stress = max(0, min(255, stress >> 2))
         print(f"calculated stress: {stress}")
 
-        # add a random offset and decrease the magnitude with a bitshift
-        return (stress + randint(1, 100)) >> 1
+        # sleep for the stress value + a random offset
+        sleep((stress + randint(1, 100)) >> 1)
 
-    def _action(self, interaction: Interaction = Interaction().NONE):
+    def _action(self, interaction: Interaction = Interaction.NONE):
         """private method that finds a runnable action in the action table and passes it to the  action runner"""
         emotions = self.emotions.get()
         runnable = []
